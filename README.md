@@ -7,7 +7,7 @@ Install
 -------
 
 ```bash
-$ go get -u github.com/maralla/daemon
+$ go get github.com/maralla/daemon@latest
 ```
 
 License
