@@ -30,14 +30,20 @@ WorkingDirectory={{ .WorkDir }}
 WantedBy=multi-user.target
 `
 
+var (
+	errNameRequired = errors.New("argument name is required")
+	errCmdRequired  = errors.New("argument cmd is required")
+)
+
 type cmdArgs struct {
-	Help        bool
 	Name        string
 	Description string
 	WorkDir     string
 	Command     string
 	SystemdDir  string
 	After       string
+	Help        bool
+	Stdout      bool
 }
 
 func initArgs() (args cmdArgs, err error) {
@@ -45,6 +51,7 @@ func initArgs() (args cmdArgs, err error) {
 	if dir == "" {
 		dir = defaultSystemdDir
 	}
+
 	flag.StringVar(&args.Name, "name", "", "Name of the daemon")
 	flag.StringVar(&args.Description, "d", "", "Daemon description")
 	flag.StringVar(&args.WorkDir, "wd", "", "Working directory")
@@ -52,19 +59,25 @@ func initArgs() (args cmdArgs, err error) {
 	flag.StringVar(&args.After, "after", "", "Systemd After")
 	flag.StringVar(&args.SystemdDir, "systemd-config-dir", dir, "Systemd config directory")
 	flag.BoolVar(&args.Help, "h", false, "Show help")
+	flag.BoolVar(&args.Stdout, "stdout", false, "Echo to stdout")
 	flag.Parse()
+
 	if args.Help {
 		flag.Usage()
 		os.Exit(0)
 	}
+
 	if args.Name == "" {
-		err = errors.New("Argument name is required")
+		err = errNameRequired
 	}
+
 	if args.Command == "" {
-		err = errors.New("Argument cmd is required")
+		err = errCmdRequired
 	}
+
 	args.After = strings.TrimSpace("network-online.target " + args.After)
-	return
+
+	return args, err
 }
 
 func die(err error) {
@@ -77,17 +90,26 @@ func main() {
 	if err != nil {
 		die(err)
 	}
+
 	run(args)
 }
 
 func run(args cmdArgs) {
 	t := template.Must(template.New("systemd-config").Parse(tpl))
 	buf := bytes.NewBuffer([]byte{})
+
 	if err := t.Execute(buf, args); err != nil {
 		die(err)
 	}
+
+	if args.Stdout {
+		fmt.Printf("%s\n", buf.Bytes())
+		return
+	}
+
 	file := path.Join(args.SystemdDir, args.Name+".service")
-	if err := ioutil.WriteFile(file, buf.Bytes(), 0644); err != nil {
+
+	if err := ioutil.WriteFile(file, buf.Bytes(), 0600); err != nil {
 		die(err)
 	}
 }
